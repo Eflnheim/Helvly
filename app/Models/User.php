@@ -86,4 +86,19 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return $this->hasMany(TicketHistory::class);
     }
+
+    public function isAdmin(): bool
+    {
+        return $this->role?->name === 'admin';
+    }
+
+    public function isAgent(): bool
+    {
+        return $this->role?->name === 'agent';
+    }
+
+    public function isRequester(): bool
+    {
+        return $this->role?->name === 'requester';
+    }
 }

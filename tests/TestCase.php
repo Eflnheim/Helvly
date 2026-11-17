@@ -2,6 +2,8 @@
 
 namespace Tests;
 
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Laravel\Fortify\Features;
 
@@ -13,4 +15,7 @@ abstract class TestCase extends BaseTestCase
             $this->markTestSkipped($message ?? "Fortify feature [{$feature}] is not enabled.");
         }
     }
+
+    public Role $adminRole;
+    public User $admin;
 }
