@@ -32,6 +32,8 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
+import { cn } from '@/lib/utils';
+
 import { dashboard } from '@/routes';
 
 import type { BreadcrumbItem } from '@/types/navigation';
@@ -39,7 +41,6 @@ import type {
     PaginatedData,
     TicketCategory,
 } from '@/types/ticket-category';
-import { cn } from '@/lib/utils';
 
 type Props = {
     categories: PaginatedData<TicketCategory>;

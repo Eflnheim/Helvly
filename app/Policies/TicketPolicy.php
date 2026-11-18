@@ -4,7 +4,6 @@ namespace App\Policies;
 
 use App\Models\Ticket;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class TicketPolicy
 {
@@ -66,6 +65,11 @@ class TicketPolicy
             return $ticket->assigned_to === $user->id;
         }
 
+        if ($user->isRequester()) {
+            return $ticket->requester_id === $user->id
+                && $ticket->status === 'open';
+        }
+
         return false;
     }
 
@@ -95,6 +99,6 @@ class TicketPolicy
      */
     public function delete(User $user, Ticket $ticket): bool
     {
-        return $user->is_active && $user->isAdmin();
+        return false;
     }
 }
