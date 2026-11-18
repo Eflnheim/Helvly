@@ -4,9 +4,12 @@
 use App\Models\Role;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
+use App\Models\TicketAttachment;
 use App\Models\User;
 use App\Models\TicketComment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
@@ -555,4 +558,210 @@ test('admin can update ticket and records changes in history', function () {
         'old_value' => 'description: Aplikasi menampilkan halaman kosong.',
         'new_value' => "description: {$newDescription}",
     ]);
+});
+
+test('requester can create ticket with attachments', function () {
+    Storage::fake('local');
+
+    $requesterRole = Role::create([
+        'name' => 'requester',
+    ]);
+
+    $requester = User::factory()->create([
+        'role_id' => $requesterRole->id,
+        'is_active' => true,
+    ]);
+
+    $category = TicketCategory::create([
+        'name' => 'Perangkat Keras',
+        'description' => 'Masalah perangkat keras',
+        'is_active' => true,
+    ]);
+
+    $file = UploadedFile::fake()->create(
+        'bukti-kerusakan.pdf',
+        100,
+        'application/pdf'
+    );
+
+    $this->actingAs($requester)
+        ->post(route('tickets.store'), [
+            'category_id' => $category->id,
+            'subject' => 'Komputer mengalami kerusakan',
+            'description' => 'Komputer tidak dapat dinyalakan.',
+            'priority' => 'high',
+            'attachments' => [$file],
+        ])
+        ->assertRedirect();
+
+    $ticket = Ticket::first();
+
+    expect($ticket)->not->toBeNull();
+
+    $attachment = TicketAttachment::first();
+
+    expect($attachment)->not->toBeNull()
+        ->and($attachment->ticket_id)->toBe($ticket->id)
+        ->and($attachment->uploaded_by)->toBe($requester->id)
+        ->and($attachment->file_name)->toBe('bukti-kerusakan.pdf')
+        ->and($attachment->file_size)->toBeGreaterThan(0);
+
+    Storage::disk('local')->assertExists($attachment->file_path);
+});
+
+test('requester can create ticket without attachments', function () {
+    Storage::fake('local');
+
+    $requesterRole = Role::create([
+        'name' => 'requester',
+    ]);
+
+    $requester = User::factory()->create([
+        'role_id' => $requesterRole->id,
+        'is_active' => true,
+    ]);
+
+    $category = TicketCategory::create([
+        'name' => 'Jaringan',
+        'description' => 'Masalah jaringan',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($requester)
+        ->post(route('tickets.store'), [
+            'category_id' => $category->id,
+            'subject' => 'Internet tidak terhubung',
+            'description' => 'Komputer tidak dapat mengakses internet.',
+            'priority' => 'medium',
+        ])
+        ->assertRedirect();
+
+    expect(Ticket::count())->toBe(1)
+        ->and(TicketAttachment::count())->toBe(0);
+
+    Storage::disk('local')->assertDirectoryEmpty('ticket-attachments');
+});
+
+test('requester cannot upload more than five attachments', function () {
+    Storage::fake('local');
+
+    $requesterRole = Role::create([
+        'name' => 'requester',
+    ]);
+
+    $requester = User::factory()->create([
+        'role_id' => $requesterRole->id,
+        'is_active' => true,
+    ]);
+
+    $category = TicketCategory::create([
+        'name' => 'Perangkat Keras',
+        'description' => 'Masalah perangkat keras',
+        'is_active' => true,
+    ]);
+
+    $attachments = [];
+
+    for ($i = 1; $i <= 6; $i++) {
+        $attachments[] = UploadedFile::fake()->create(
+            "bukti-{$i}.pdf",
+            100,
+            'application/pdf'
+        );
+    }
+
+    $this->actingAs($requester)
+        ->post(route('tickets.store'), [
+            'category_id' => $category->id,
+            'subject' => 'Komputer mengalami kerusakan',
+            'description' => 'Komputer tidak dapat dinyalakan.',
+            'priority' => 'high',
+            'attachments' => $attachments,
+        ])
+        ->assertSessionHasErrors('attachments');
+
+    expect(Ticket::count())->toBe(0)
+        ->and(TicketAttachment::count())->toBe(0);
+
+    Storage::disk('local')->assertDirectoryEmpty('ticket-attachments');
+});
+
+test('requester cannot upload attachment larger than five megabytes', function () {
+    Storage::fake('local');
+
+    $requesterRole = Role::create([
+        'name' => 'requester',
+    ]);
+
+    $requester = User::factory()->create([
+        'role_id' => $requesterRole->id,
+        'is_active' => true,
+    ]);
+
+    $category = TicketCategory::create([
+        'name' => 'Jaringan',
+        'description' => 'Masalah jaringan',
+        'is_active' => true,
+    ]);
+
+    $file = UploadedFile::fake()->create(
+        'bukti-kerusakan.pdf',
+        5121,
+        'application/pdf'
+    );
+
+    $this->actingAs($requester)
+        ->post(route('tickets.store'), [
+            'category_id' => $category->id,
+            'subject' => 'Internet mengalami gangguan',
+            'description' => 'Koneksi internet tidak stabil.',
+            'priority' => 'high',
+            'attachments' => [$file],
+        ])
+        ->assertSessionHasErrors('attachments.0');
+
+    expect(Ticket::count())->toBe(0)
+        ->and(TicketAttachment::count())->toBe(0);
+
+    Storage::disk('local')->assertDirectoryEmpty('ticket-attachments');
+});
+
+test('requester cannot upload unsupported attachment format', function () {
+    Storage::fake('local');
+
+    $requesterRole = Role::create([
+        'name' => 'requester',
+    ]);
+
+    $requester = User::factory()->create([
+        'role_id' => $requesterRole->id,
+        'is_active' => true,
+    ]);
+
+    $category = TicketCategory::create([
+        'name' => 'Perangkat Lunak',
+        'description' => 'Masalah perangkat lunak',
+        'is_active' => true,
+    ]);
+
+    $file = UploadedFile::fake()->create(
+        'program.exe',
+        100,
+        'application/x-msdownload'
+    );
+
+    $this->actingAs($requester)
+        ->post(route('tickets.store'), [
+            'category_id' => $category->id,
+            'subject' => 'Aplikasi mengalami masalah',
+            'description' => 'Aplikasi tidak dapat dijalankan.',
+            'priority' => 'medium',
+            'attachments' => [$file],
+        ])
+        ->assertSessionHasErrors('attachments.0');
+
+    expect(Ticket::count())->toBe(0)
+        ->and(TicketAttachment::count())->toBe(0);
+
+    Storage::disk('local')->assertDirectoryEmpty('ticket-attachments');
 });

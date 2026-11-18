@@ -156,7 +156,11 @@ export default function TicketsIndex({
                         </p>
                     </div>
 
-                    {can_create && <Button>Buat Tiket</Button>}
+                    {can_create && (
+                        <Button asChild>
+                            <Link href="/tickets/create">Buat Tiket</Link>
+                        </Button>
+                    )}
                 </div>
 
                 {/* Search & Filters */}

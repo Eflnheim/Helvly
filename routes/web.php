@@ -10,7 +10,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
 
     Route::resource('tickets', TicketController::class)
-        ->only(['index', 'store', 'show', 'update']);
+        ->only(['index', 'create', 'store', 'show', 'update']);
 });
 
 Route::middleware(['auth', 'verified', 'role:admin'])->group(function () {

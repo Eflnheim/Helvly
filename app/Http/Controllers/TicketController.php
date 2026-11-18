@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Ticket;
 use App\Models\TicketCategory;
+use App\Models\TicketAttachment;
 use App\Http\Requests\StoreTicketRequest;
 use App\Http\Requests\UpdateTicketRequest;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -87,39 +90,92 @@ class TicketController extends Controller
         ]);
     }
 
-    public function store(StoreTicketRequest $request)
+    public function create(): InertiaResponse
     {
-        $ticket = DB::transaction(function () use ($request) {
-            $ticket = Ticket::create([
-                'ticket_number' => 'TEMP-' . Str::random(20),
-                'requester_id' => $request->user()->id,
-                'assigned_to' => null,
-                ...$request->validated(),
-                'status' => 'open',
-            ]);
+        Gate::authorize('create', Ticket::class);
 
-            $ticket->update([
-                'ticket_number' => sprintf(
-                    'HLV-%s-%05d',
-                    now()->format('Y'),
-                    $ticket->id
-                ),
-            ]);
+        return Inertia::render('tickets/create', [
+            'categories' => TicketCategory::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+        ]);
+    }
 
-            $ticket->histories()->create([
-                'user_id' => $request->user()->id,
-                'action' => 'created',
-                'old_value' => null,
-                'new_value' => 'open',
-            ]);
+    public function store(StoreTicketRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
 
-            return $ticket;
-        });
+        $attachments = $validated['attachments'] ?? [];
 
-        return Inertia::flash('toast', [
+        unset($validated['attachments']);
+
+        $storedFiles = [];
+
+        try {
+            $ticket = DB::transaction(function () use (
+                $request,
+                $validated,
+                $attachments,
+                &$storedFiles
+            ) {
+                $ticket = Ticket::create([
+                    'ticket_number' => 'TEMP-' . Str::random(20),
+                    'requester_id' => $request->user()->id,
+                    'assigned_to' => null,
+                    ...$validated,
+                    'status' => 'open',
+                ]);
+
+                $ticket->update([
+                    'ticket_number' => sprintf(
+                        'HLV-%s-%05d',
+                        now()->format('Y'),
+                        $ticket->id
+                    ),
+                ]);
+
+                foreach ($attachments as $file) {
+                    $path = $file->store('ticket-attachments', 'local');
+
+                    if ($path === false) {
+                        throw new \RuntimeException('Gagal menyimpan attachment.');
+                    }
+
+                    $storedFiles[] = $path;
+
+                    TicketAttachment::create([
+                        'ticket_id' => $ticket->id,
+                        'comment_id' => null,
+                        'uploaded_by' => $request->user()->id,
+                        'file_name' => $file->getClientOriginalName(),
+                        'file_path' => $path,
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+                }
+
+                $ticket->histories()->create([
+                    'user_id' => $request->user()->id,
+                    'action' => 'created',
+                    'old_value' => null,
+                    'new_value' => 'open',
+                ]);
+
+                return $ticket;
+            });
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($storedFiles);
+
+            throw $exception;
+        }
+
+        Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'Tiket berhasil dibuat.',
-        ])->back();
+            'message' => 'Tiket berhasil dibuat.'
+        ]);
+        
+        return to_route('tickets.index');
     }
 
     public function show(Ticket $ticket): InertiaResponse

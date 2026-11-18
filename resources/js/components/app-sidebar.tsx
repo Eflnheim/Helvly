@@ -26,7 +26,12 @@ const mainNavItems: NavItem[] = [
         title: 'Kategori Tiket',
         href: '/ticket-categories',
         icon: Tags,
-    }
+    },
+    {
+        title: 'Daftar Tiket',
+        href: '/tickets',
+        icon: LayoutGrid,
+    },
 ];
 
 const footerNavItems: NavItem[] = [

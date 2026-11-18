@@ -44,6 +44,27 @@ class StoreTicketRequest extends FormRequest
                 'required',
                 Rule::in(['low', 'medium', 'high', 'urgent']),
             ],
+            'attachments' => [
+                'nullable',
+                'array',
+                'max:5',
+            ],
+            'attachments.*' => [
+                'file',
+                'max:5120',
+                'mimes:jpg,jpeg,png,pdf,doc,docx,xls,xlsx',
+            ],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'attachments.array' => 'Format file lampiran tidak valid.',
+            'attachments.max' => 'Maksimal 5 file yang dapat diunggah.',
+            'attachments.*.file' => 'File lampiran tidak valid.',
+            'attachments.*.max' => 'Ukuran setiap file maksimal 5 MB.',
+            'attachments.*.mimes' => 'Format file harus JPG, JPEG, PNG, PDF, DOC, DOCX, XLS, atau XLSX.',
         ];
     }
 }
